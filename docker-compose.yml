@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-notify}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-notify}
+      POSTGRES_DB: ${POSTGRES_DB:-notify}
+    ports:
+      # Loopback only, and beside Engram's 55432 rather than on 5432, so a dev
+      # machine running both cannot collide.
+      - '127.0.0.1:${POSTGRES_PORT:-55433}:5432'
+    volumes:
+      # 18+ images store data in major-version subdirectories, so the volume
+      # mounts one level above what older images used.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-notify} -d ${POSTGRES_DB:-notify}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

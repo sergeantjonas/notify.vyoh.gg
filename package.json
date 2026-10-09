@@ -1,0 +1,41 @@
+{
+  "name": "notify",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "volta": {
+    "node": "24.15.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "pnpm run build && pnpm run \"/^dev:/\"",
+    "dev:types": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "dev:server": "node --env-file-if-exists=.env --watch dist/server.js",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "pnpm run build && node --env-file-if-exists=.env dist/db/migrate.js",
+    "typecheck:cc": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --pretty false",
+    "lint:cc": "biome check --reporter=summary",
+    "format": "biome check --write",
+    "test:cc": "vitest run --reporter=dot",
+    "check:cc": "pnpm run typecheck:cc && pnpm run lint:cc",
+    "verify:cc": "pnpm run check:cc && pnpm run test:cc"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "fastify": "5.12.4",
+    "postgres": "3.4.9",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.13",
+    "@types/node": "22.20.3",
+    "drizzle-kit": "0.31.10",
+    "typescript": "7.0.2",
+    "vitest": "5.0.1"
+  }
+}

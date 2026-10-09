@@ -1,0 +1,9 @@
+# pnpm refuses to run any dependency's install scripts unless it is listed here,
+# which is the guardrail against a postinstall foothold. Every entry is an
+# explicit decision: flip one to true only after establishing the package
+# genuinely needs its build, and that it is one we actually depend on.
+#
+# esbuild: denied. Its platform binary arrives as an optional dependency, so the
+# postinstall only re-validates what is already installed.
+allowBuilds:
+  esbuild: false

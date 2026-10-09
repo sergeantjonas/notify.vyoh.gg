@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  // Tests sit outside the build, so they are checked in a pass of their own.
+  "include": ["src/**/*.test.ts", "src/**/*.fixture.ts", "vitest.config.ts"],
+  "exclude": []
+}

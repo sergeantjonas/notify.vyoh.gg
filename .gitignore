@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+
+.claude/
+CLAUDE.md
+
+# Force-tracked so a malicious postinstall writing one of these shows up in
+# git status instead of hiding under an ignore rule.
+!.cursorrules
+!.cursor/
+!.windsurfrules
+!.aider.conf.yml
+!.github/copilot-instructions.md
+!.vscode/setup.mjs
