@@ -64,6 +64,8 @@ services:
       # unset, so a source with no webhook yet holds its messages.
       SOURCE_ENGRAM_SECRET: ${SOURCE_ENGRAM_SECRET:-}
       SOURCE_ENGRAM_DISCORD_URL: ${SOURCE_ENGRAM_DISCORD_URL:-}
+      SOURCE_STATUS_SECRET: ${SOURCE_STATUS_SECRET:-}
+      SOURCE_STATUS_DISCORD_URL: ${SOURCE_STATUS_DISCORD_URL:-}
     # Past the 10s a Discord send may take, so a pass in flight is recorded
     # before the container is killed, rather than sent again after it restarts.
     stop_grace_period: 30s
