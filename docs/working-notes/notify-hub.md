@@ -1,8 +1,9 @@
 # Notify hub
 
 **Status:** Building — scoped 2026-10-09. Chunk 1, the scaffold, landed the
-same day; chunks 2 and 3, accepting and delivering, on 2026-10-10. Chunk 4,
-deploying, built the same day and waiting on the box.
+same day; chunks 2, 3 and 4 — accepting, delivering and deploying — on
+2026-10-10, when it went live at `notify.vyoh.gg`. Chunk 5, Engram as the
+first sender, is next.
 
 Engram decides when a followed show's new episode is ready, and vyoh.gg will
 decide when a wishlist game drops in price. Delivering either is the same
@@ -141,7 +142,7 @@ port asked of the box, the nginx vhost and certificate for `notify.vyoh.gg`,
 DNS, and `/srv/notify/.env` by hand. Whether its data earns a backup is
 decided here: it is a delivery log, not a record.
 
-Built 2026-10-10, and not yet on the box:
+Built 2026-10-10, and live the same day:
 
 - **The image** (`Dockerfile`) runs migrations on boot, then the server, as
   the `node` user, with a health check on `/health`. Built and smoked in CI
@@ -170,9 +171,19 @@ Built 2026-10-10, and not yet on the box:
 - **DNS** for `notify.vyoh.gg` points at the box, both families, checked the
   same day against Engram's records.
 
-Still to do on the box: `/srv/notify/.env` (`POSTGRES_PASSWORD`,
-`SOURCE_ENGRAM_SECRET`, `SOURCE_ENGRAM_DISCORD_URL`), the vhost installed and
-certbot run, then the first `scripts/deploy.sh` and `discord:test`.
+Going live, 2026-10-10:
+
+- `/srv/notify` made by root and owned by `deploy`, like the other tenants;
+  `.env` written on the box, 0600, its password and Engram's secret drawn
+  from `openssl rand -hex 32` there and never printed, the webhook pasted in
+  by the owner.
+- The vhost installed and certbot run by the owner.
+- The `notify` package came out of its first CI run public, so the box —
+  which holds no GHCR login — pulls it as it pulls Engram's.
+- `scripts/deploy.sh` put `sha-458223f` up: both containers healthy, the
+  migrations applied on boot, the loopback and public smokes passed, and an
+  unauthenticated post answered 401. `discord-test-cli.js engram` on the box
+  reached the channel.
 
 ## Chunk 5 · Engram sends
 
