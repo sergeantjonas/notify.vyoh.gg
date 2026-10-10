@@ -3,7 +3,7 @@
 **Status:** Building — scoped 2026-10-09. Chunk 1, the scaffold, landed the
 same day; chunks 2, 3 and 4 — accepting, delivering and deploying — on
 2026-10-10, when it went live at `notify.vyoh.gg`. Chunk 5, Engram as the
-first sender, is next.
+first sender, deployed the same day; no real alert has passed through yet.
 
 Engram decides when a followed show's new episode is ready, and vyoh.gg will
 decide when a wishlist game drops in price. Delivering either is the same
@@ -189,3 +189,9 @@ Going live, 2026-10-10:
 
 Engram drains its `alert` table to `POST /messages`, which is chunk 5 of
 Engram's `episode-alerts.md`.
+
+Deployed 2026-10-10 in Engram's `sha-485209d`, with `SOURCE_ENGRAM_SECRET`
+copied into `/srv/engram/.env` as `NOTIFY_SECRET`. From Engram's container,
+over the public name: `/health` answered 200, a post with no secret 401, and
+an empty body under Engram's secret 400, so the secret is accepted and nothing
+was queued. Nothing on the hub's side changed for it.
