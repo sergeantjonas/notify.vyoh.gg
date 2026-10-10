@@ -17,7 +17,17 @@ down; that alert comes from healthchecks.io instead.
 cp .env.example .env
 docker compose up -d     # Postgres on 127.0.0.1:55433
 pnpm install
+pnpm db:migrate
 pnpm dev                 # the API on http://localhost:2013, rebuilt on save
+```
+
+A project posts with its own secret, set as `SOURCE_<NAME>_SECRET`:
+
+```sh
+curl -X POST http://localhost:2013/messages \
+  -H "authorization: Bearer $SOURCE_ENGRAM_SECRET" \
+  -H 'content-type: application/json' \
+  -d '{"key":"ready@show:tvdb:452595/s01e0004","title":"S01E04 is ready"}'
 ```
 
 `pnpm verify:cc` typechecks, lints and tests.

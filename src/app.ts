@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { Config } from './config.js';
 import type { Database } from './db/client.js';
+import { registerMessageRoutes } from './routes/messages.js';
 
 export interface AppDeps {
   config: Config;
@@ -46,6 +47,8 @@ export function buildApp({ config, db }: AppDeps): FastifyInstance {
       return reply.code(503).send({ status: 'degraded', database: 'unreachable' });
     }
   });
+
+  registerMessageRoutes(app, config, db);
 
   return app;
 }

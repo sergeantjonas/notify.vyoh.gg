@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readSources, type Source } from './sources.js';
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -11,19 +12,30 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
-export type Config = z.infer<typeof schema>;
+export type Config = z.infer<typeof schema> & {
+  /** Who may post. Empty is allowed: the hub boots and refuses every post. */
+  sources: Source[];
+};
+
+function fail(issues: string[]): never {
+  // The issues only, never the values: secrets live in this environment.
+  throw new Error(`Invalid configuration:\n${issues.map((issue) => `  ${issue}`).join('\n')}`);
+}
 
 function orThrow<T>(result: z.ZodSafeParseResult<T>): T {
   if (result.success) return result.data;
-  // The issues only, never the values: secrets live in this environment.
-  const issues = result.error.issues
-    .map((issue) => `  ${issue.path.join('.')}: ${issue.message}`)
-    .join('\n');
-  throw new Error(`Invalid configuration:\n${issues}`);
+  fail(result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`));
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return orThrow(schema.safeParse(env));
+  const parsed = schema.safeParse(env);
+  const { sources, issues } = readSources(env);
+  // Both lists at once, so one boot names every problem rather than the first.
+  const schemaIssues = parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+  if (!parsed.success || issues.length > 0) fail([...schemaIssues, ...issues]);
+  return { ...parsed.data, sources };
 }
 
 /** Just the database, for `db:migrate`, which reads nothing else. */

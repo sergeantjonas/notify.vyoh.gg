@@ -1,7 +1,8 @@
 # Notify hub
 
 **Status:** Building — scoped 2026-10-09. Chunk 1, the scaffold, landed the
-same day.
+same day; chunk 2, accepting messages, on 2026-10-10. Chunk 3, delivering, is
+next.
 
 Engram decides when a followed show's new episode is ready, and vyoh.gg will
 decide when a wishlist game drops in price. Delivering either is the same
@@ -54,15 +55,36 @@ default, AI-config paths force-tracked.
 ## Chunk 2 · Accepting messages
 
 `POST /messages`, authenticated per source, and a `message` table unique on
-`(source, key)`. To settle here:
+`(source, key)`. Landed 2026-10-10, settling:
 
-- **How a source is named.** The lean is that the secret names it — a bearer
-  token maps to one source — so the body carries no `source` a leaked secret
-  could forge another project's name into.
-- **How sources are configured.** One secret and one Discord URL per source,
-  from the environment.
-- **What a message may carry**: title, body, url, and limits that keep a
-  message inside what Discord will take.
+- **The secret names the source.** A post carries `authorization: Bearer
+  <secret>`, and the secret maps to one source; the body has no `source`, and
+  one that names a source is refused, so a leaked secret cannot post under
+  another project's name. Every configured secret is compared in constant
+  time, not just until the first match.
+- **Sources come from the environment**, one `SOURCE_<NAME>_SECRET` each —
+  `SOURCE_ENGRAM_SECRET` is the source `engram` — so adding or rotating one
+  is one line of `.env`. A secret under 32 characters, one with anything but
+  printable ASCII — a header could not carry it intact — or two sources
+  sharing one stops the boot and names the variable, never the value. None
+  set, and the hub boots and refuses every post. Chunk 3 adds a Discord URL
+  per source beside each.
+- **A message is `key`, `title`, and optionally `body` and `url`**, strict:
+  a misspelt field is refused with the path, not silently dropped. Discord's
+  limits bound them — 256 characters of title, 2000 of body — and a key has
+  no whitespace and at most 200 characters. None may hold NUL, which Postgres
+  would refuse with a 500, a blank body is stored as none, and a url is
+  normalised so a space reaches Discord as `%20`. A request is capped at
+  16 KB.
+- **The secret is checked before the body is read**, as Engram's ingest
+  route does, so a caller without one is refused as that whatever it sent.
+- **Every accepted post answers 202 `{ duplicate }`**, a repeat included,
+  since a sender's only question is whether the hub has it. A refused secret
+  is 401 and logs the scheme and lengths only — the scheme only when it looks
+  like one, since a header that is the bare secret has no space.
+
+Run end to end against the local database the same day: the first post of a
+key was written, the second answered `duplicate: true`, a wrong secret 401.
 
 ## Chunk 3 · Delivering
 

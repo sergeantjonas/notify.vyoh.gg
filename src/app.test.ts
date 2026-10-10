@@ -9,6 +9,7 @@ const config: Config = {
   PORT: 0,
   HOST: '127.0.0.1',
   LOG_LEVEL: 'fatal',
+  sources: [],
 };
 
 /** A database that answers, or one that has gone away. */
