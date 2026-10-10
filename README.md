@@ -40,6 +40,13 @@ pnpm discord:test engram
 
 `pnpm verify:cc` typechecks, lints and tests.
 
+## Deploying
+
+CI builds and smokes the image on every push to `main`; `scripts/deploy.sh`
+puts that commit's image on the shared VPS and smokes it. The first time,
+`/srv/notify/.env` and the vhost come first — see chunk 4 of
+[notify-hub.md](docs/working-notes/notify-hub.md).
+
 ## Design
 
 The reasoning lives in [docs/working-notes/](docs/working-notes/), starting at

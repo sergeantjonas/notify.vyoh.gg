@@ -35,7 +35,7 @@ function isDiscordWebhook(value: string): boolean {
     url !== null &&
     url.protocol === 'https:' &&
     DISCORD_HOSTS.has(url.hostname) &&
-    /^\/api\/(?:v\d+\/)?webhooks\//.test(url.pathname)
+    /^\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+\/?$/.test(url.pathname)
   );
 }
 

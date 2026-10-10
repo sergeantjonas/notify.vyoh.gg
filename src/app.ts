@@ -34,8 +34,12 @@ export function buildApp({ config, db }: AppDeps): FastifyInstance {
       .send({ error: 'internal', message: 'the request could not be completed' });
   });
 
-  /** Liveness only — answers whether the process is up, nothing about Postgres. */
-  app.get('/health', async () => ({ status: 'ok' }));
+  /**
+   * Liveness only — answers whether the process is up, nothing about Postgres.
+   * Names the service, so a deploy's public smoke cannot mistake another
+   * tenant's health check, answered by nginx's default server, for this one.
+   */
+  app.get('/health', async () => ({ status: 'ok', service: 'notify' }));
 
   /** Readiness — without its database this instance can neither accept nor send. */
   app.get('/ready', async (_request, reply) => {

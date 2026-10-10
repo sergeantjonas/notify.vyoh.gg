@@ -30,6 +30,14 @@ describe('createDiscordSender', () => {
     });
   });
 
+  it("tells a global rate limit from one webhook's", async () => {
+    const limited = new Response(JSON.stringify({ retry_after: 1, global: true }), { status: 429 });
+    expect(await createDiscordSender(answering(limited))(url, payload)).toMatchObject({
+      status: 429,
+      global: true,
+    });
+  });
+
   it('reports a refusal by status, and no answer as null, without throwing', async () => {
     const refused = new Response('{"message":"Invalid Form Body"}', { status: 400 });
     expect(await createDiscordSender(answering(refused))(url, payload)).toEqual({

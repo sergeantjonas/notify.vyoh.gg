@@ -1,10 +1,10 @@
-import { and, asc, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Database } from '../db/client.js';
 import { messages } from '../db/schema.js';
 import type { Source } from '../sources.js';
 import type { Send } from './discord.js';
-import { type Batch, planBatches } from './plan.js';
+import { type Batch, type PendingMessage, planBatches } from './plan.js';
 
 /**
  * How many times Discord may refuse a message for something about it before
@@ -15,8 +15,8 @@ export const MAX_ATTEMPTS = 5;
 /** How long a source must be quiet before its burst goes out as one post. */
 export const SETTLE_MS = 60_000;
 
-/** Most rows one pass reads; anything beyond waits for the next pass. */
-const PASS_LIMIT = 500;
+/** Most rows one pass reads for one source — ten full posts; the rest wait. */
+const SOURCE_LIMIT = 100;
 
 /** Statuses that say the webhook is gone or wrong, not the message. */
 const WEBHOOK_REFUSED = new Set([401, 403, 404]);
@@ -53,28 +53,32 @@ export async function drain(
   for (const source of sources) if (source.discordUrl) urls.set(source.name, source.discordUrl);
   if (urls.size === 0) return result;
 
-  // Only sources that can be sent to. A source with no webhook, or one since
-  // removed from the config, holds its rows; read here, its oldest would fill
-  // the pass and starve every other source behind them.
-  const pending = await db
-    .select({
-      id: messages.id,
-      source: messages.source,
-      title: messages.title,
-      body: messages.body,
-      url: messages.url,
-      receivedAt: messages.receivedAt,
-    })
-    .from(messages)
-    .where(
-      and(
-        isNull(messages.deliveredAt),
-        lt(messages.attempts, MAX_ATTEMPTS),
-        inArray(messages.source, [...urls.keys()]),
-      ),
-    )
-    .orderBy(asc(messages.receivedAt))
-    .limit(PASS_LIMIT);
+  // Each source read on its own, and only sources that can be sent to. One
+  // shared read, oldest first, would let a single source's backlog — no
+  // webhook, or one refused for days — fill every pass and starve the rest.
+  const pending: PendingMessage[] = [];
+  for (const source of urls.keys()) {
+    const rows = await db
+      .select({
+        id: messages.id,
+        source: messages.source,
+        title: messages.title,
+        body: messages.body,
+        url: messages.url,
+        receivedAt: messages.receivedAt,
+      })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.source, source),
+          isNull(messages.deliveredAt),
+          lt(messages.attempts, MAX_ATTEMPTS),
+        ),
+      )
+      .orderBy(asc(messages.receivedAt))
+      .limit(SOURCE_LIMIT);
+    pending.push(...rows);
+  }
 
   const deliver = async (batch: Batch): Promise<Next> => {
     const outcome = await send(batch.url, batch.payload);

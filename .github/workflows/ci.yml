@@ -1,0 +1,122 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Main queues rather than cancels, so the `main` tag always names a finished
+# run; a pull request has nothing to publish, so its older run is cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Read-only unless a job asks for more; `image` is the only one that does.
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/notify
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Nothing here pushes with git, and every later step runs dependency
+          # code that could otherwise read the token out of .git/config.
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No database: every test drives routes through `app.inject()` with a
+      # stubbed one, which is why `buildApp` takes it.
+      - run: pnpm run verify:cc
+      # Generated from schema.ts: a schema change committed without its
+      # migration surfaces here. It compares against the snapshot, so a hand
+      # edit to the SQL alone does not.
+      - name: migrations match the schema
+        run: |
+          pnpm run db:generate
+          git diff --exit-code -- drizzle
+
+  image:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=main
+
+      # Built and smoked before it is pushed, so a failing smoke publishes
+      # nothing. The push is a cache hit.
+      - name: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: notify:smoke
+          cache-from: type=gha,scope=notify
+          cache-to: type=gha,scope=notify,mode=max
+
+      # Against a real Postgres, so the boot-time migration runs as it will on
+      # the box, and /ready proves the API reached the database.
+      - name: smoke
+        run: |
+          docker network create smoke >/dev/null
+          trap 'docker logs api-smoke || true; docker rm -f api-smoke pg-smoke >/dev/null || true; docker network rm smoke >/dev/null || true' EXIT
+          docker run -d --name pg-smoke --network smoke \
+            -e POSTGRES_USER=notify -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=notify \
+            postgres:18-alpine >/dev/null
+          pg=
+          for _ in $(seq 1 30); do
+            if docker exec pg-smoke pg_isready -q -h 127.0.0.1 -U notify; then pg=1; break; fi
+            sleep 1
+          done
+          test -n "$pg" || { echo "postgres never became ready" >&2; exit 1; }
+          docker run -d --name api-smoke --network smoke \
+            -e DATABASE_URL=postgres://notify:smoke@pg-smoke:5432/notify \
+            -e HOST=0.0.0.0 \
+            notify:smoke >/dev/null
+          ready=
+          for _ in $(seq 1 30); do
+            if docker exec api-smoke node -e "fetch('http://127.0.0.1:2013/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))" 2>/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test -n "$ready" || { echo "the API never became ready" >&2; exit 1; }
+
+      - name: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=notify

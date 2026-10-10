@@ -1,0 +1,78 @@
+# Production only. Never loaded implicitly — it is passed with -f and carries
+# its own project name, so a stray `docker compose up` in this directory
+# cannot start it.
+#
+#   docker compose -f compose.prod.yaml pull
+#   docker compose -f compose.prod.yaml up -d --no-build --wait
+#
+# `scripts/deploy.sh` is the way in; it always passes NOTIFY_IMAGE_TAG. A bare
+# `up -d` here with the variable unset reverts a pinned stack to :main.
+name: notify-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-notify}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /srv/notify/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-notify}
+      TZ: ${TZ:-Europe/Brussels}
+    # No published port: nothing outside this stack needs the database, and
+    # anything that ever does can `docker compose exec` into it.
+    volumes:
+      # 18+ images keep data in a major-version subdirectory, so the volume
+      # mounts one level above where older images put it.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-notify} -d ${POSTGRES_DB:-notify}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  api:
+    image: ghcr.io/sergeantjonas/notify:${NOTIFY_IMAGE_TAG:-main}
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Built from the parts Compose already has, so the URL and the server it
+      # points at cannot disagree.
+      DATABASE_URL: postgres://${POSTGRES_USER:-notify}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-notify}
+      # Inside the container this must not be loopback, or the published port
+      # reaches nothing.
+      HOST: 0.0.0.0
+      PORT: 2013
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: ${TZ:-Europe/Brussels}
+
+      # One pair per source, listed here as well as in .env: Compose passes
+      # only what it is told to. A new source is two lines in each. Empty is
+      # unset, so a source with no webhook yet holds its messages.
+      SOURCE_ENGRAM_SECRET: ${SOURCE_ENGRAM_SECRET:-}
+      SOURCE_ENGRAM_DISCORD_URL: ${SOURCE_ENGRAM_DISCORD_URL:-}
+    # Past the 10s a Discord send may take, so a pass in flight is recorded
+    # before the container is killed, rather than sent again after it restarts.
+    stop_grace_period: 30s
+    ports:
+      - '127.0.0.1:${API_PORT:-2013}:2013'
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+volumes:
+  postgres-data:

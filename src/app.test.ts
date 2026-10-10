@@ -31,7 +31,7 @@ describe('health and readiness', () => {
   it('answers health without asking the database', async () => {
     app = buildApp({ config, db: stubDb(false) });
     const response = await app.inject({ method: 'GET', url: '/health' });
-    expect(response.json()).toEqual({ status: 'ok' });
+    expect(response.json()).toEqual({ status: 'ok', service: 'notify' });
   });
 
   it('is ready only while the database answers', async () => {

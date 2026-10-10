@@ -2,7 +2,7 @@
 
 **Status:** Building — scoped 2026-10-09. Chunk 1, the scaffold, landed the
 same day; chunks 2 and 3, accepting and delivering, on 2026-10-10. Chunk 4,
-deploying, is next.
+deploying, built the same day and waiting on the box.
 
 Engram decides when a followed show's new episode is ready, and vyoh.gg will
 decide when a wishlist game drops in price. Delivering either is the same
@@ -102,8 +102,9 @@ Landed 2026-10-10, settling:
   without an API version — so a typo cannot post alerts to some other host.
   One with no secret beside it is a misspelt name and stops the boot. A
   source with no webhook keeps its messages, accepted and held, and a pass
-  never reads them, so they cannot crowd out the sources that can send;
-  every boot logs which sources have none.
+  never reads them; every boot logs which sources have none. Each source with
+  one is read on its own, at most 100 rows a pass, so no source's backlog —
+  a webhook refused for days — can crowd out the others.
 - **Every 15 seconds, a pass**, never two at once, started in `server.ts`
   rather than `buildApp` so no test can reach Discord. A source goes out once
   it has been quiet for 60 seconds, so a burst arrives as one post, or once
@@ -139,6 +140,39 @@ An image built in CI and pulled on the box, the compose stack, a loopback
 port asked of the box, the nginx vhost and certificate for `notify.vyoh.gg`,
 DNS, and `/srv/notify/.env` by hand. Whether its data earns a backup is
 decided here: it is a delivery log, not a record.
+
+Built 2026-10-10, and not yet on the box:
+
+- **The image** (`Dockerfile`) runs migrations on boot, then the server, as
+  the `node` user, with a health check on `/health`. Built and smoked in CI
+  against a real Postgres before it is pushed to `ghcr.io/sergeantjonas/notify`
+  as `sha-<commit>` and `main` (`.github/workflows/ci.yml`), which also fails
+  a run whose migrations do not match the schema. Run locally the same day
+  against the development database: migrated, ready, 390 MB.
+- **`compose.prod.yaml`**: Postgres with no published port, the API on
+  `127.0.0.1:2013` — free on the box when asked the same day — and memory
+  limits of 512m and 256m. Each source's two variables are listed there as
+  well as in `.env`, since Compose passes only what it is told to.
+- **`deploy/nginx/notify.vyoh.gg.conf`**: plain HTTP for certbot to upgrade,
+  and a 32 KB body ceiling so nothing larger is spooled on its way to the
+  API's own 16 KB refusal.
+- **`scripts/deploy.sh`** mirrors Engram's: the manifest checked before the
+  box is touched, the ops surface copied and never `.env`, pull and
+  `up --wait`, loopback then public smoke, and a prune scoped to this repo's
+  images. `/health` names the service, because without the vhost nginx
+  answers `notify.vyoh.gg` from another tenant's server block, whose own
+  health check says `ok` too.
+- **No backup.** The senders keep what they decided until the hub has taken
+  it — Engram marks an alert delivered only after a 202 — so losing this
+  database loses its duplicate history and the messages accepted but not
+  yet sent — at most five minutes' worth while every webhook works, more for
+  a source whose webhook is missing or refused — not a record. The volume survives every deploy.
+- **DNS** for `notify.vyoh.gg` points at the box, both families, checked the
+  same day against Engram's records.
+
+Still to do on the box: `/srv/notify/.env` (`POSTGRES_PASSWORD`,
+`SOURCE_ENGRAM_SECRET`, `SOURCE_ENGRAM_DISCORD_URL`), the vhost installed and
+certbot run, then the first `scripts/deploy.sh` and `discord:test`.
 
 ## Chunk 5 · Engram sends
 

@@ -23,12 +23,16 @@ const sources = [
 const pending = (source: string, titles: string[]): PendingMessage[] =>
   titles.map((title) => ({ id: title, source, title, body: null, url: null, receivedAt: old }));
 
-/** Answers the pass's one read, and records every update with what it set. */
-const stubDb = (rows: PendingMessage[]) => {
+/**
+ * Answers each source's read in turn — engram's, then vyoh's — and records
+ * every update with what it set.
+ */
+const stubDb = (...perSource: PendingMessage[][]) => {
   const updates: Record<string, unknown>[] = [];
   let reads = 0;
   const db = {
     select: () => {
+      const rows = perSource[reads] ?? [];
       reads += 1;
       return {
         from: () => ({ where: () => ({ orderBy: () => ({ limit: async () => rows }) }) }),
@@ -73,13 +77,15 @@ const refused = (status: number | null, global = false): SendResult => ({
 
 describe('drain', () => {
   it('marks a batch delivered once Discord takes it, and logs no URL', async () => {
-    const { db, updates } = stubDb(pending('engram', ['a', 'b']));
+    const { db, updates, reads } = stubDb(pending('engram', ['a', 'b']), []);
     const { send, posts } = scripted([{ ok: true }]);
     const { log, lines } = recordingLog();
     expect(await drain(db, sources, send, log, now)).toEqual({ sent: 2, limited: false });
     expect(posts).toEqual([['a', 'b']]);
     expect(updates).toEqual([expect.objectContaining({ deliveredAt: expect.anything() })]);
     expect(JSON.stringify(lines)).not.toContain('token');
+    // One read per source, so neither's backlog can crowd the other out.
+    expect(reads()).toBe(2);
   });
 
   it('reads nothing when no source has a webhook', async () => {
@@ -89,30 +95,31 @@ describe('drain', () => {
     expect(reads()).toBe(0);
   });
 
+  /** Eleven of engram's, which is two posts, and one of vyoh's. */
+  const eleven = Array.from({ length: 11 }, (_, i) => `e${i}`);
+
   it('leaves a source for later, counting nothing, when its webhook is down or gone', async () => {
     for (const answer of [refused(503), refused(null), refused(404), refused(401)]) {
-      const { db, updates } = stubDb([...pending('engram', ['a']), ...pending('vyoh', ['b'])]);
+      const { db, updates } = stubDb(pending('engram', eleven), pending('vyoh', ['v']));
       const { send, posts } = scripted([answer, { ok: true }]);
       const result = await drain(db, sources, send, recordingLog().log, now);
-      // Engram is left; vyoh, behind it, still goes out.
-      expect(posts).toEqual([['a'], ['b']]);
+      // Engram's second post is never tried; vyoh, behind it, still goes out.
+      expect(posts).toEqual([eleven.slice(0, 10), ['v']]);
       expect(result.sent).toBe(1);
       expect(updates).toEqual([expect.objectContaining({ deliveredAt: expect.anything() })]);
     }
   });
 
   it("holds only the rate-limited source, unless Discord's limit is global", async () => {
-    const rows = [...pending('engram', ['a']), ...pending('vyoh', ['b'])];
     const local = scripted([refused(429), { ok: true }]);
-    expect((await drain(stubDb(rows).db, sources, local.send, recordingLog().log, now)).sent).toBe(
-      1,
-    );
-    expect(local.posts).toEqual([['a'], ['b']]);
+    const db = () => stubDb(pending('engram', eleven), pending('vyoh', ['v'])).db;
+    expect((await drain(db(), sources, local.send, recordingLog().log, now)).sent).toBe(1);
+    expect(local.posts).toEqual([eleven.slice(0, 10), ['v']]);
 
     const global = scripted([refused(429, true)]);
-    const result = await drain(stubDb(rows).db, sources, global.send, recordingLog().log, now);
+    const result = await drain(db(), sources, global.send, recordingLog().log, now);
     expect(result).toEqual({ sent: 0, limited: true });
-    expect(global.posts).toEqual([['a']]);
+    expect(global.posts).toEqual([eleven.slice(0, 10)]);
   });
 
   it('retries a refused batch a message at a time, counting only the one refused', async () => {
@@ -125,6 +132,14 @@ describe('drain', () => {
       expect.objectContaining({ deliveredAt: expect.anything() }),
       expect.objectContaining({ lastStatus: 400 }),
     ]);
+  });
+
+  it('stops a split as soon as a single send is rate-limited', async () => {
+    const { db, updates } = stubDb(pending('engram', ['a', 'b']));
+    const { send, posts } = scripted([refused(400), refused(429)]);
+    await drain(db, sources, send, recordingLog().log, now);
+    expect(posts).toEqual([['a', 'b'], ['a']]);
+    expect(updates).toEqual([]);
   });
 });
 
@@ -140,7 +155,7 @@ describe('startDelivery', () => {
       new Promise((resolve) => {
         release = () => resolve({ ok: true });
       });
-    const { db, updates } = stubDb(pending('engram', ['a']));
+    const { db, updates, reads } = stubDb(pending('engram', ['a']));
     const stop = startDelivery({ db, sources, send, log: recordingLog().log, intervalMs: 1000 });
 
     // A pass starts and waits on Discord; the clock is past its settle window.
@@ -157,5 +172,9 @@ describe('startDelivery', () => {
     await stopping;
     expect(stopped).toBe(true);
     expect(updates).toHaveLength(1);
+
+    // And no pass after it: the one pass read each source once.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(reads()).toBe(2);
   });
 });
