@@ -14,8 +14,8 @@ describe('readSources', () => {
     });
     expect(issues).toEqual([]);
     expect(sources).toEqual([
-      { name: 'engram', secret: engram },
-      { name: 'vyoh-gg', secret: vyoh },
+      { name: 'engram', secret: engram, discordUrl: 'https://discord.com/api/webhooks/1/x' },
+      { name: 'vyoh-gg', secret: vyoh, discordUrl: null },
     ]);
   });
 
@@ -36,6 +36,28 @@ describe('readSources', () => {
     expect(issues).toEqual(['SOURCE_ENGRAM_SECRET: must be printable ASCII without spaces']);
   });
 
+  it('refuses a webhook URL that is not Discord, and one with no secret beside it', () => {
+    const { issues } = readSources({
+      SOURCE_ENGRAM_SECRET: engram,
+      SOURCE_ENGRAM_DISCORD_URL: 'https://example.com/api/webhooks/1/x',
+      SOURCE_ENGRAN_DISCORD_URL: 'https://discord.com/api/webhooks/2/y',
+    });
+    expect(issues).toEqual([
+      'SOURCE_ENGRAM_DISCORD_URL: must be a Discord webhook URL',
+      'SOURCE_ENGRAN_DISCORD_URL: has no SOURCE_ENGRAN_SECRET beside it',
+    ]);
+    expect(issues.join()).not.toContain('webhooks/2/y');
+  });
+
+  it('takes a webhook with an API version in its path, or on canary', () => {
+    const { sources, issues } = readSources({
+      SOURCE_ENGRAM_SECRET: engram,
+      SOURCE_ENGRAM_DISCORD_URL: 'https://canary.discord.com/api/v10/webhooks/1/x',
+    });
+    expect(issues).toEqual([]);
+    expect(sources[0]?.discordUrl).toBe('https://canary.discord.com/api/v10/webhooks/1/x');
+  });
+
   it('refuses two sources sharing a secret, since the secret is what names one', () => {
     const { issues } = readSources({ SOURCE_ENGRAM_SECRET: engram, SOURCE_VYOH_SECRET: engram });
     expect(issues).toEqual(['sources engram and vyoh share a secret']);
@@ -44,8 +66,8 @@ describe('readSources', () => {
 
 describe('sourceFor', () => {
   const sources = [
-    { name: 'engram', secret: engram },
-    { name: 'vyoh', secret: vyoh },
+    { name: 'engram', secret: engram, discordUrl: null },
+    { name: 'vyoh', secret: vyoh, discordUrl: null },
   ];
 
   it('finds the source whose secret was offered', () => {

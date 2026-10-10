@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 /**
  * One thing a project said was worth telling the owner, as it was posted.
@@ -23,6 +23,13 @@ export const messages = pgTable(
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
     /** Null until Discord has accepted it, which is what "did it tell me?" reads. */
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    /**
+     * Sends Discord refused for something about the message itself. An outage
+     * or a rate limit is not counted, so a long one cannot use them up.
+     */
+    attempts: integer('attempts').notNull().default(0),
+    /** The status of the last send Discord refused, to say why one is stuck. */
+    lastStatus: integer('last_status'),
   },
   (t) => [
     unique('message_source_key').on(t.source, t.key),

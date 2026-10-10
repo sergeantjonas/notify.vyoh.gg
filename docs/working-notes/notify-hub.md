@@ -1,8 +1,8 @@
 # Notify hub
 
 **Status:** Building — scoped 2026-10-09. Chunk 1, the scaffold, landed the
-same day; chunk 2, accepting messages, on 2026-10-10. Chunk 3, delivering, is
-next.
+same day; chunks 2 and 3, accepting and delivering, on 2026-10-10. Chunk 4,
+deploying, is next.
 
 Engram decides when a followed show's new episode is ready, and vyoh.gg will
 decide when a wishlist game drops in price. Delivering either is the same
@@ -93,6 +93,45 @@ burst once it has been quiet for a short window, marking each message
 delivered after Discord accepts it, and leaving it for the next pass when
 Discord refuses or rate-limits. A test command posts one message to check a
 URL before any real alert exists.
+
+Landed 2026-10-10, settling:
+
+- **Each source's webhook is `SOURCE_<NAME>_DISCORD_URL`**, beside its
+  secret, and must be a Discord webhook — https, `discord.com`,
+  `discordapp.com`, `canary.` or `ptb.discord.com`, `/api/webhooks/` with or
+  without an API version — so a typo cannot post alerts to some other host.
+  One with no secret beside it is a misspelt name and stops the boot. A
+  source with no webhook keeps its messages, accepted and held, and a pass
+  never reads them, so they cannot crowd out the sources that can send;
+  every boot logs which sources have none.
+- **Every 15 seconds, a pass**, never two at once, started in `server.ts`
+  rather than `buildApp` so no test can reach Discord. A source goes out once
+  it has been quiet for 60 seconds, so a burst arrives as one post, or once
+  its oldest message has waited five minutes, so a steady stream is late
+  rather than held for ever. Each message is an embed — title, body, url, the
+  time it arrived — up to Discord's ten embeds and 6000 characters a post,
+  with `allowed_mentions` empty so a title can never ping anyone.
+- **What Discord answers decides what happens.** A 2xx marks the batch
+  delivered. Anything that is the webhook's trouble rather than the
+  message's counts nothing and leaves that source for the next pass while the
+  others carry on: no answer, a 5xx, a 429, or a 401, 403 or 404 — a webhook
+  deleted or rotated before `.env` caught up. A 429 Discord marks global ends
+  the pass for everyone. Any other 4xx is about what was sent: the batch is
+  retried a message at a time, so one bad message does not count against the
+  rest, and the one Discord refuses alone has an attempt counted. After five,
+  the hub stops trying; the row keeps `last_status` to say why.
+- **Shutdown waits for a pass in flight**, so a send is recorded before the
+  database closes rather than going out again after the restart.
+- **The URL is never logged.** The sender returns a status, not an error,
+  and every log line names the source.
+- **`pnpm discord:test <source>`** posts one embed to that source's channel —
+  `docker compose exec api node dist/discord-test-cli.js <source>` on the
+  box.
+
+Run against the local database the same day, with Discord stubbed: a refused
+two-message batch was split, the good message marked delivered and the bad
+one held with one attempt and `last_status` 400; and 600 older rows from a
+source with no webhook did not keep either from being sent.
 
 ## Chunk 4 · Deploying
 

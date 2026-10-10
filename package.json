@@ -18,6 +18,7 @@
     "start": "node --env-file-if-exists=.env dist/server.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "pnpm run build && node --env-file-if-exists=.env dist/db/migrate.js",
+    "discord:test": "pnpm run build && node --env-file-if-exists=.env dist/discord-test-cli.js",
     "typecheck:cc": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --pretty false",
     "lint:cc": "biome check --reporter=summary",
     "format": "biome check --write",

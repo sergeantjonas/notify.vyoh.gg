@@ -11,7 +11,7 @@ const config: Config = {
   PORT: 0,
   HOST: '127.0.0.1',
   LOG_LEVEL: 'fatal',
-  sources: [{ name: 'engram', secret }],
+  sources: [{ name: 'engram', secret, discordUrl: null }],
 };
 
 /**

@@ -7,7 +7,7 @@ describe('loadConfig', () => {
       DATABASE_URL: 'postgres://x',
       SOURCE_ENGRAM_SECRET: 'e'.repeat(64),
     });
-    expect(config.sources).toEqual([{ name: 'engram', secret: 'e'.repeat(64) }]);
+    expect(config.sources).toEqual([{ name: 'engram', secret: 'e'.repeat(64), discordUrl: null }]);
     expect(config.PORT).toBe(2013);
   });
 

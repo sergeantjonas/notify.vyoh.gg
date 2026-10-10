@@ -30,6 +30,14 @@ curl -X POST http://localhost:2013/messages \
   -d '{"key":"ready@show:tvdb:452595/s01e0004","title":"S01E04 is ready"}'
 ```
 
+and it reaches Discord within about a minute and a quarter, once the source
+has been quiet long enough for a burst to go out as one post. To check a
+source's webhook before any real alert exists:
+
+```sh
+pnpm discord:test engram
+```
+
 `pnpm verify:cc` typechecks, lints and tests.
 
 ## Design
