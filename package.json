@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "volta": {
-    "node": "24.15.0"
+    "node": "24.22.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
